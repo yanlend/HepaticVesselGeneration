@@ -14,42 +14,53 @@ using namespace std;
 /*
 * Main function to run liver class
 */
-int main() {
+int main(int argc, char* argv[]) {
+
+	// Check command line arguments
+	if (argc != 10) {
+		cerr << "Usage: " << argv[0] << " <tree_number> <endpoints> <Nx> <Ny> <Nz> <phantom_res> <desiredRes> <phantom_path> <output_path>" << endl;
+		cerr << "Example: " << argv[0] << " 5 50 512 512 512 0.77 0.3 phantom.dat ./output" << endl;
+		return 1;
+	}
 
 	// Variables 
 	int endpoints;//number of endpoints to simulate
 	int tree_number;//number of trees
 	int Nx, Ny, Nz;//number of voxels in x,y,z
 	float phantom_res, desiredRes; //resolution of the phantom [mm] and the output vessel phantom [mm]
+	string outputPath; //path for output directory
 
-	// Get inputs
-	cout << "Number of trees to build: ";
-	if (cin >> tree_number) {}
-	else { cerr << "Error: Please input numbers of trees as an int, returning..." << endl; return 1; }
+	// Parse command line arguments
+	try {
+		tree_number = stoi(argv[1]);
+		endpoints = stoi(argv[2]);
+		Nx = stoi(argv[3]);
+		Ny = stoi(argv[4]);
+		Nz = stoi(argv[5]);
+		phantom_res = stof(argv[6]);
+		desiredRes = stof(argv[7]);
+	}
+	catch (const exception& e) {
+		cerr << "Error: Invalid argument format. " << e.what() << endl;
+		return 1;
+	}
 
-	cout << "Number of Endpoints per tree: ";
-	if(cin >> endpoints){}
-	else { cerr << "Error: Please input numbers of endpoints as an int, returning..." << endl; return 1; }
-
-	cout << "Size of X Y and Z dimension of the blood demand map [voxels] (Example: 512 512 512): ";
-	if (cin >> Nx >> Ny >> Nz) {}
-	else { cerr << "Error: Please input numbers as X Y Z, returning..." << endl; return 1; }
-
-	cout << "Blood demand map isotropic voxel resolution [mm] (Example: 0.77): ";
-	if (cin >> phantom_res) {}
-	else { cerr << "Error: Please input phantom resolution as a float, returning..." << endl; return 1; }
-
-	cout << "Desired output resolution of vessels [mm] (Example: 0.3): ";
-	if (cin >> desiredRes) {}
-	else { cerr << "Error: Please input desired output resolution as a float, returning..." << endl; return 1; }
+	// Validate inputs
+	if (tree_number <= 0 || endpoints <= 0 || Nx <= 0 || Ny <= 0 || Nz <= 0 || phantom_res <= 0 || desiredRes <= 0) {
+		cerr << "Error: All parameters must be positive values." << endl;
+		return 1;
+	}
 
 	// initialize random number tree
 	int t = time(NULL);
 	mt19937 mt;
 	mt.seed(t);
 	
-	//Build required directory
-	_mkdir("../Vessel_sim_CPU/CLines");
+	// Build required directory with CLines subdirectory
+	std::string phantomPath = string(argv[8]);
+	outputPath = string(argv[9]);
+	_mkdir(outputPath.c_str());
+
 
 	// Build requested number of trees
 	for (int i = 1; i <= tree_number; i++) {
@@ -64,7 +75,7 @@ int main() {
 		seed = 1522380473;
 		mt.seed(seed);
 #endif
-		string dir = "../Vessel_sim_CPU/CLines/seed_" + to_string(i) + ".txt";
+		string dir = outputPath + "/seed_" + to_string(i) + ".txt";
 		ofstream file;
 		file.open(dir);
 		file << seed;
@@ -75,7 +86,7 @@ int main() {
 		float scale = 1.3f + 1.0f * (mt() / (double)mt.max());//what to scale the final radius by [4,7]mm is what is set
 		scale *= initialResoltion / phantom_res;//scale radius by resolution change 
 		float outResolutionScaleFactor = phantom_res / desiredRes;
-		int check = tree.build_tree(Nx, Ny, Nz, endpoints, i, scale, seed, outResolutionScaleFactor);//generate vasculature
+		int check = tree.build_tree(Nx, Ny, Nz, endpoints, i, scale, seed, outResolutionScaleFactor, phantomPath, outputPath);//generate vasculature
 
 
 		//check if we got stuck building the tree
@@ -83,7 +94,7 @@ int main() {
 			//try again until we do not get stuck
 			while (check != 0) {
 				cerr << "We got stuck somewhere creating that tree...trying again" << endl;
-				check = tree.build_tree(Nx, Ny, Nz, endpoints, i, scale, seed, outResolutionScaleFactor);
+				check = tree.build_tree(Nx, Ny, Nz, endpoints, i, scale, seed, outResolutionScaleFactor, phantomPath, outputPath);
 			}
 		}
 	}
@@ -556,7 +567,7 @@ Random Hepatic Tree Generation within Blood Demand Map
 //	outResolutionScaleFactor: factor to scale the input resolution by
 */
 int  Liver::build_tree(const int Nx, const int Ny, const int Nz, int terminal_pts, int tree_number,
-	float scale, unsigned int seed, float outResolutionScaleFactor) {
+	float scale, unsigned int seed, float outResolutionScaleFactor, string phantomPath, string outputPath) {
 
 	//set PRNG
 	mt19937 mt;
@@ -565,7 +576,7 @@ int  Liver::build_tree(const int Nx, const int Ny, const int Nz, int terminal_pt
 
 
 	unsigned __int8 *perf = new unsigned __int8[10 * Nz*Ny*Nx];
-	string fname2 = "../Vessel_sim_CPU/BloodDemandMap/Phantom.dat";
+	string fname2 = phantomPath;
 	FILE *fid; 
 	errno_t err;
 	if ((err = fopen_s(&fid, fname2.c_str(), "rb")) != 0){
@@ -777,7 +788,7 @@ int  Liver::build_tree(const int Nx, const int Ny, const int Nz, int terminal_pt
 	*
 	*/
 	//writing vessel tree to txt file, see readme on data format
-	string dir2 = "../Vessel_sim_CPU/CLines/Tree" + to_string(tree_number) + ".txt";
+	string dir2 = outputPath + "/Tree" + to_string(tree_number) + ".txt";
 	ofstream tree;
 	tree.open(dir2);
 	for (unsigned int t = 0; t < prePushCount; t++) {
@@ -789,7 +800,7 @@ int  Liver::build_tree(const int Nx, const int Ny, const int Nz, int terminal_pt
 	tree.close();
 
 	//writing vessel radi to txt file, see readme on data format
-	dir2 = "../Vessel_sim_CPU/CLines/Radii" + to_string(tree_number) + ".txt";
+	dir2 = outputPath + "/Radii" + to_string(tree_number) + ".txt";
 	ofstream rad;
 	rad.open(dir2);
 	for (unsigned int t = 0; t < prePushCount; t++) {
