@@ -33,7 +33,7 @@ private:
 		float x, y, z;
 	};
 	//function to create centerline hepatic arterial tree
-	void create_tree(float xstart[], float ystart[], float zstart[], float xstop[], float ystop[],
+	int create_tree(float xstart[], float ystart[], float zstart[], float xstop[], float ystop[],
 		float zstop[], int root[], int section[], float length[], int Qs[], queue<array<float, 4>> region1, queue<array<float, 4>> region2, queue<array<float, 4>> region3,
 		queue<array<float, 4>> region4, queue<array<float, 4>> region5, queue<array<float, 4>> region6, queue<array<float, 4>> region7,
 		queue<array<float, 4>> region8, float gamma, int terminal_pts, int children[], int *count, float scale,

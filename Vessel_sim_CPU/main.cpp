@@ -94,6 +94,10 @@ int main(int argc, char* argv[]) {
 			//try again until we do not get stuck
 			while (check != 0) {
 				cerr << "We got stuck somewhere creating that tree...trying again" << endl;
+				seed = mt();
+				file.open(dir);
+				file << seed;
+				file.close();
 				check = tree.build_tree(Nx, Ny, Nz, endpoints, i, scale, seed, outResolutionScaleFactor, phantomPath, outputPath);
 			}
 		}
@@ -103,7 +107,7 @@ int main(int argc, char* argv[]) {
 }
 
 //function to create the centerline hepatic vessel tree object
-void Liver::create_tree(float xstart[], float ystart[], float zstart[], float xstop[], float ystop[], float zstop[], int root[], int section[],
+int Liver::create_tree(float xstart[], float ystart[], float zstart[], float xstop[], float ystop[], float zstop[], int root[], int section[],
 	float length[], int Qs[], queue<array<float, 4>> region1, queue<array<float, 4>> region2, queue<array<float, 4>> region3,
 	queue<array<float, 4>> region4, queue<array<float, 4>> region5, queue<array<float, 4>> region6, queue<array<float, 4>> region7, queue<array<float, 4>> region8,
 	float gamma, int terminal_pts, int children[], int *count_pointer, float scale, const int Nx, const int Ny, const int Nz, unsigned __int8 perf[],
@@ -195,6 +199,7 @@ void Liver::create_tree(float xstart[], float ystart[], float zstart[], float xs
 
 
 	// Loop to generate points
+	int last_iter_error = -1;//flag to see if we got stuck on the last point
 	for (int n = 0; n < terminal_pts + offset + removed; n++) {
 		//all regions empty, resample
 		if (region1.empty() && region2.empty() && region3.empty() && region4.empty() && region5.empty() && region6.empty() && region7.empty() && region8.empty()) {
@@ -236,7 +241,13 @@ void Liver::create_tree(float xstart[], float ystart[], float zstart[], float xs
 			}
 		}
 		if (n % 5000 == 0) {
-			cout << "Starting branch: " << n - offset - removed << " of " << terminal_pts << endl;
+			cout << "Starting branch: " << n - offset - removed << " of " << terminal_pts << "; n is " << n << endl;
+			if (last_iter_error == n - offset - removed) {
+				cerr << "We got stuck on that last point" << endl;
+				return -1;
+			} else {
+				last_iter_error = n - offset - removed;
+			}
 		}
 		// Location of Perfusion Point
 		bool found = 1;
@@ -547,14 +558,12 @@ void Liver::create_tree(float xstart[], float ystart[], float zstart[], float xs
 		//check if the desired number of endpoints have been connected
 		if (count == ((terminal_pts * 2) + 1)) {
 			*count_pointer = count;
-			return;
+			return 0;
 		}
 	}
 	// Terminal Pts
 	*count_pointer = count;
-	return;
-
-
+	return 0;
 }
 
 
@@ -717,9 +726,13 @@ int  Liver::build_tree(const int Nx, const int Ny, const int Nz, int terminal_pt
 	*    Arterial Tree
 	*
 	*/ 
-	create_tree(xstart, ystart, zstart, xstop, ystop, zstop, root, section, length, Qs, region1,
+	int success = create_tree(xstart, ystart, zstart, xstop, ystop, zstop, root, section, length, Qs, region1,
 		region2, region3, region4, region5, region6, region7, region8, gamma, terminal_pts, children, &count, scale,
 		Nx, Ny, Nz, perf, mt, arrayAlloc, dims);
+	
+	if (success != 0) {
+		return -1;
+	}
 
 
 	//get radii of all branches
